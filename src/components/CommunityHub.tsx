@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { Users, Plus, CheckCircle2, Sparkles, MapPin } from 'lucide-react';
+import { CheckCircle2, MapPin, Plus, Sparkles, Users } from 'lucide-react';
+import { MAX_PROMPT_LENGTH, MAX_TEXT_FIELD_LENGTH } from '../constants';
 import type { CommunityPledge } from '../types/vayunex';
+import { sanitizeText } from '../utils/helpers';
+import { Card } from './ui/Card';
 
 interface CommunityHubProps {
   pledges: CommunityPledge[];
@@ -26,11 +29,12 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    const cleanTitle = sanitizeText(title, MAX_TEXT_FIELD_LENGTH);
+    if (!cleanTitle) return;
     onCreatePledge(
-      title.trim(),
-      neighborhood.trim() || `${cityName} Local Block`,
-      description.trim() || 'Community-led winter clean air action.'
+      cleanTitle,
+      sanitizeText(neighborhood, MAX_TEXT_FIELD_LENGTH) || `${cityName} Local Block`,
+      sanitizeText(description, MAX_PROMPT_LENGTH) || 'Community-led winter clean air action.'
     );
     setTitle('');
     setNeighborhood('');
@@ -40,7 +44,7 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <Card className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-bold text-slate-900">
             Community Airshed Pledges — {cityName}
@@ -55,34 +59,35 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
           onClick={() => setShowForm((v) => !v)}
           className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
           Start Local Pledge
         </button>
-      </div>
+      </Card>
 
-      {/* Collective Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <Card className="p-5">
           <div className="text-xs font-semibold text-slate-500">Active Households</div>
           <div className="mt-1 font-mono-num text-3xl font-bold text-slate-900">
             {totalParticipants.toLocaleString()}
           </div>
-          <div className="mt-1 text-xs text-slate-500">Committed across {pledges.length} local initiatives</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mt-1 text-xs text-slate-500">
+            Committed across {pledges.length} local initiatives
+          </div>
+        </Card>
+        <Card className="p-5">
           <div className="text-xs font-semibold text-slate-500">Monthly CO₂e Prevented</div>
           <div className="mt-1 font-mono-num text-3xl font-bold text-emerald-700">
             {(totalCo2 / 1000).toFixed(1)} <span className="text-sm font-normal">tonnes</span>
           </div>
           <div className="mt-1 text-xs text-slate-500">Collective transport &amp; heating shift</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        </Card>
+        <Card className="p-5">
           <div className="text-xs font-semibold text-slate-500">Direct PM2.5 Kept Out of Air</div>
           <div className="mt-1 font-mono-num text-3xl font-bold text-teal-700">
             {(totalPm25 / 1000).toFixed(2)} <span className="text-sm font-normal">kg/mo</span>
           </div>
           <div className="mt-1 text-xs text-slate-500">Prevents localized street-level smog spikes</div>
-        </div>
+        </Card>
       </div>
 
       {showForm && (
@@ -96,6 +101,8 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
               type="text"
+              maxLength={MAX_TEXT_FIELD_LENGTH}
+              aria-label="Pledge title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Pledge title (e.g., No-Burn Courtyard Evenings)"
@@ -104,6 +111,8 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
             />
             <input
               type="text"
+              maxLength={MAX_TEXT_FIELD_LENGTH}
+              aria-label="Neighborhood or zone"
               value={neighborhood}
               onChange={(e) => setNeighborhood(e.target.value)}
               placeholder="Neighborhood / Zone"
@@ -111,6 +120,8 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
             />
           </div>
           <textarea
+            maxLength={MAX_PROMPT_LENGTH}
+            aria-label="Pledge description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe the collective action and why it lowers local smog..."
@@ -135,7 +146,6 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
         </form>
       )}
 
-      {/* Pledges Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {pledges.map((pledge) => (
           <div
@@ -148,31 +158,30 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
           >
             <div>
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                <MapPin className="h-3.5 w-3.5" />
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
                 {pledge.neighborhood}
               </div>
               <h3 className="mt-2 font-display text-base font-bold text-slate-900">
                 {pledge.title}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {pledge.description}
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">{pledge.description}</p>
             </div>
 
             <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                  <Users className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
                   {pledge.participants} households
                 </span>
                 <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  -{pledge.monthlyCo2Kg.toLocaleString()} kg CO₂e/mo
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />-
+                  {pledge.monthlyCo2Kg.toLocaleString()} kg CO₂e/mo
                 </span>
               </div>
 
               <button
                 type="button"
+                aria-pressed={pledge.joined}
                 onClick={() => onToggleJoin(pledge.id)}
                 className={`flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition ${
                   pledge.joined
@@ -182,7 +191,7 @@ export const CommunityHub: React.FC<CommunityHubProps> = ({
               >
                 {pledge.joined ? (
                   <>
-                    <CheckCircle2 className="h-4 w-4" /> Joined Pledge
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Joined Pledge
                   </>
                 ) : (
                   'Join This Pledge'

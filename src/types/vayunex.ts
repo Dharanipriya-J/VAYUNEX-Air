@@ -114,8 +114,11 @@ export interface CommunityPledge {
   joined: boolean;
 }
 
+/** Non-sensitive preferences persisted in localStorage. */
 export interface AppSettings {
-  geminiApiKey: string;
   alertThresholdAqi: number;
   notificationsEnabled: boolean;
 }
+
+/** Tabs available in the primary navigation. */
+export type TabId = 'overview' | 'assistant' | 'routine' | 'indoor' | 'impact' | 'community';

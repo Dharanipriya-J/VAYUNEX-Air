@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Sparkles, Send, Bot, User, TrendingDown, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Bot, Send, Sparkles, TrendingDown, User } from 'lucide-react';
+import { MAX_PROMPT_LENGTH } from '../constants';
 import { generateAiResponse } from '../services/vayuAiEngine';
 import type { AirQualityData, ChatMessage, HouseholdProfile } from '../types/vayunex';
+import { createId, formatTimeLabel, sanitizeText } from '../utils/helpers';
+import { Card } from './ui/Card';
 
 interface AiAssistantProps {
   aq: AirQualityData;
@@ -15,10 +18,6 @@ const STARTER_PROMPTS = [
   'Analyze how my cooking fuel affects indoor air',
   'Compare low-emission commute alternatives',
 ];
-
-function formatTimeLabel(): string {
-  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 function renderFormattedText(text: string): React.ReactNode {
   return text.split('\n').map((line, idx) => {
@@ -59,11 +58,7 @@ function renderFormattedText(text: string): React.ReactNode {
   });
 }
 
-export const AiAssistant: React.FC<AiAssistantProps> = ({
-  aq,
-  profile,
-  geminiApiKey,
-}) => {
+export const AiAssistant: React.FC<AiAssistantProps> = ({ aq, profile, geminiApiKey }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -84,11 +79,11 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
   }, [messages, thinking]);
 
   const sendPrompt = async (text: string) => {
-    const trimmed = text.trim();
+    const trimmed = sanitizeText(text, MAX_PROMPT_LENGTH);
     if (!trimmed || thinking) return;
 
     const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
+      id: createId('u'),
       role: 'user',
       content: trimmed,
       timestamp: formatTimeLabel(),
@@ -101,7 +96,7 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
     const reply = await generateAiResponse(trimmed, aq, profile, geminiApiKey);
 
     const botMsg: ChatMessage = {
-      id: `a-${Date.now()}`,
+      id: createId('a'),
       role: 'assistant',
       content: reply.content,
       timestamp: formatTimeLabel(),
@@ -115,11 +110,10 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      {/* Main Chat Panel */}
       <div className="lg:col-span-8 flex h-[640px] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white" aria-hidden="true">
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
@@ -134,15 +128,19 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
           </span>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+        <div
+          role="log"
+          aria-live="polite"
+          aria-label="Conversation history"
+          className="flex-1 space-y-5 overflow-y-auto p-5"
+        >
           {messages.map((msg) => (
             <div
               key={msg.id}
               className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700" aria-hidden="true">
                   <Bot className="h-4 w-4" />
                 </div>
               )}
@@ -163,20 +161,15 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
                 {msg.impactCards && msg.impactCards.length > 0 && (
                   <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {msg.impactCards.map((card) => (
-                      <div
-                        key={card.label}
-                        className="rounded-xl border border-emerald-200/80 bg-white p-2.5"
-                      >
+                      <div key={card.label} className="rounded-xl border border-emerald-200/80 bg-white p-2.5">
                         <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                          <TrendingDown className="h-3 w-3" />
+                          <TrendingDown className="h-3 w-3" aria-hidden="true" />
                           {card.label}
                         </div>
                         <div className="mt-0.5 font-mono-num text-sm font-bold text-slate-900">
                           {card.value}
                         </div>
-                        <div className="mt-0.5 text-[11px] leading-tight text-slate-500">
-                          {card.detail}
-                        </div>
+                        <div className="mt-0.5 text-[11px] leading-tight text-slate-500">{card.detail}</div>
                       </div>
                     ))}
                   </div>
@@ -192,7 +185,7 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
                         className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-900"
                       >
                         {s}
-                        <ArrowUpRight className="h-3 w-3 text-slate-400" />
+                        <ArrowUpRight className="h-3 w-3 text-slate-400" aria-hidden="true" />
                       </button>
                     ))}
                   </div>
@@ -200,7 +193,7 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
               </div>
 
               {msg.role === 'user' && (
-                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-700">
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-700" aria-hidden="true">
                   <User className="h-4 w-4" />
                 </div>
               )}
@@ -209,7 +202,7 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
 
           {thinking && (
             <div className="flex items-center gap-3 text-sm text-slate-500">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700" aria-hidden="true">
                 <Bot className="h-4 w-4 animate-pulse" />
               </div>
               <span>Analyzing {aq.city.name} hourly smog curve &amp; household impact...</span>
@@ -218,7 +211,6 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -229,8 +221,10 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-500/20">
             <input
               type="text"
+              maxLength={MAX_PROMPT_LENGTH}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              aria-label="Ask VayuNex AI"
               placeholder="Ask about safe outdoor hours, DIY purifiers, cooking swaps, or masks..."
               className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
             />
@@ -240,15 +234,14 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
             >
               <span>Send</span>
-              <Send className="h-3.5 w-3.5" />
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
         </form>
       </div>
 
-      {/* Right Context Sidebar */}
       <div className="lg:col-span-4 space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <Card className="p-5">
           <h3 className="font-display text-sm font-bold text-slate-900">
             Active Personalization Context
           </h3>
@@ -287,9 +280,9 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
               </dd>
             </div>
           </dl>
-        </div>
+        </Card>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <Card className="p-5">
           <h3 className="font-display text-sm font-bold text-slate-900">Quick Prompts</h3>
           <div className="mt-3 space-y-2">
             {STARTER_PROMPTS.map((p) => (
@@ -303,7 +296,7 @@ Synchronized with **${aq.city.name}’s current AQI (${aq.aqi})** and your **${p
               </button>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

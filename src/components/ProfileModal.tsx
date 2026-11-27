@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
-import { X, Users } from 'lucide-react';
-import type {
-  BudgetMode,
-  CookingFuel,
-  HomeType,
-  HouseholdProfile,
-  PrimaryCommute,
-  RespiratorySensitivity,
-} from '../types/vayunex';
+import { useId, useState } from 'react';
+import type { FormEvent } from 'react';
+import { Users } from 'lucide-react';
+import { MAX_TEXT_FIELD_LENGTH } from '../constants';
+import type { HouseholdProfile } from '../types/vayunex';
+import { clamp, sanitizeText } from '../utils/helpers';
+import { Modal } from './ui/Modal';
 
 interface ProfileModalProps {
   profile: HouseholdProfile;
@@ -15,219 +12,203 @@ interface ProfileModalProps {
   onClose: () => void;
 }
 
-export const ProfileModal: React.FC<ProfileModalProps> = ({
-  profile,
-  onSave,
-  onClose,
-}) => {
-  const [form, setForm] = useState<HouseholdProfile>(profile);
+const FAMILY_SIZE_RANGE = { min: 1, max: 15 } as const;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(form);
+interface Option<T extends string> {
+  value: T;
+  label: string;
+}
+
+const SENSITIVITY_OPTIONS: Option<HouseholdProfile['respiratorySensitivity']>[] = [
+  { value: 'none', label: 'None' },
+  { value: 'mild', label: 'Mild / Seasonal Allergies' },
+  { value: 'asthma_copd', label: 'Asthma / COPD / Cardiac' },
+];
+const HOME_OPTIONS: Option<HouseholdProfile['homeType']>[] = [
+  { value: 'apartment', label: 'Apartment / Condo' },
+  { value: 'house', label: 'Independent House' },
+];
+const FUEL_OPTIONS: Option<HouseholdProfile['cookingFuel']>[] = [
+  { value: 'electric_induction', label: 'Electric / Induction' },
+  { value: 'gas', label: 'Gas Stove' },
+  { value: 'biomass', label: 'Wood / Biomass' },
+];
+const COMMUTE_OPTIONS: Option<HouseholdProfile['primaryCommute']>[] = [
+  { value: 'car', label: 'Personal Car' },
+  { value: 'transit', label: 'Metro / Bus / Rail' },
+  { value: 'bike_walk', label: 'Walk / Bike' },
+];
+const BUDGET_OPTIONS: Option<HouseholdProfile['budgetMode']>[] = [
+  { value: 'diy_low_cost', label: 'DIY & Zero-Cost Measures First' },
+  { value: 'balanced', label: 'Balanced (DIY + Essential Gear)' },
+  { value: 'smart_home', label: 'Smart Purifiers & Appliances' },
+];
+
+const INPUT_CLASS =
+  'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30';
+
+interface SelectFieldProps<T extends string> {
+  label: string;
+  value: T;
+  options: Option<T>[];
+  onChange: (value: T) => void;
+}
+
+function SelectField<T extends string>({ label, value, options, onChange }: SelectFieldProps<T>) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-semibold text-slate-700">
+        {label}
+      </label>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value as T)} className={INPUT_CLASS}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Dialog for editing the household and lifestyle profile that personalizes guidance. */
+export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
+  const [form, setForm] = useState<HouseholdProfile>(profile);
+  const nameId = useId();
+  const sizeId = useId();
+
+  const update = <K extends keyof HouseholdProfile>(key: K, value: HouseholdProfile[K]) =>
+    setForm((previous) => ({ ...previous, [key]: value }));
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    onSave({
+      ...form,
+      householdName: sanitizeText(form.householdName, MAX_TEXT_FIELD_LENGTH) || 'My Household',
+      familySize: clamp(Math.round(form.familySize) || FAMILY_SIZE_RANGE.min, FAMILY_SIZE_RANGE.min, FAMILY_SIZE_RANGE.max),
+    });
     onClose();
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="profile-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+    <Modal
+      title="Household & Lifestyle Profile"
+      description="Tailors your daily routine, indoor air measures & AI guidance"
+      icon={<Users className="h-4 w-4" />}
+      onClose={onClose}
+      size="lg"
     >
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-              <Users className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 id="profile-modal-title" className="font-display text-lg font-bold text-slate-900">
-                Household &amp; Lifestyle Profile
-              </h2>
-              <p className="text-xs text-slate-500">
-                Tailors your daily routine, indoor air hacks &amp; AI guidance
-              </p>
-            </div>
+      <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={nameId} className="block text-xs font-semibold text-slate-700">
+              Household Name
+            </label>
+            <input
+              id={nameId}
+              type="text"
+              maxLength={MAX_TEXT_FIELD_LENGTH}
+              value={form.householdName}
+              onChange={(event) => update('householdName', event.target.value)}
+              className={INPUT_CLASS}
+            />
           </div>
+          <div>
+            <label htmlFor={sizeId} className="block text-xs font-semibold text-slate-700">
+              Family Size
+            </label>
+            <input
+              id={sizeId}
+              type="number"
+              min={FAMILY_SIZE_RANGE.min}
+              max={FAMILY_SIZE_RANGE.max}
+              value={form.familySize}
+              onChange={(event) => update('familySize', Number(event.target.value))}
+              className={INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        <fieldset className="flex flex-wrap gap-4 rounded-xl bg-slate-50 p-3">
+          <legend className="sr-only">Household members and equipment</legend>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.hasChildren}
+              onChange={(event) => update('hasChildren', event.target.checked)}
+              className="accent-emerald-600"
+            />
+            Children in home
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.hasSeniors}
+              onChange={(event) => update('hasSeniors', event.target.checked)}
+              className="accent-emerald-600"
+            />
+            Older adults (65+)
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.hasPurifier}
+              onChange={(event) => update('hasPurifier', event.target.checked)}
+              className="accent-emerald-600"
+            />
+            Have HEPA air purifier
+          </label>
+        </fieldset>
+
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Respiratory Sensitivity"
+            value={form.respiratorySensitivity}
+            options={SENSITIVITY_OPTIONS}
+            onChange={(value) => update('respiratorySensitivity', value)}
+          />
+          <SelectField label="Home Type" value={form.homeType} options={HOME_OPTIONS} onChange={(value) => update('homeType', value)} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Primary Cooking Fuel"
+            value={form.cookingFuel}
+            options={FUEL_OPTIONS}
+            onChange={(value) => update('cookingFuel', value)}
+          />
+          <SelectField
+            label="Primary Commute"
+            value={form.primaryCommute}
+            options={COMMUTE_OPTIONS}
+            onChange={(value) => update('primaryCommute', value)}
+          />
+        </div>
+
+        <SelectField
+          label="Solution Preference"
+          value={form.budgetMode}
+          options={BUDGET_OPTIONS}
+          onChange={(value) => update('budgetMode', value)}
+        />
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close household profile modal"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="rounded-xl bg-emerald-700 px-5 py-2 text-xs font-semibold text-white hover:bg-emerald-800"
+          >
+            Save &amp; Personalize
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Household Name
-              </label>
-              <input
-                type="text"
-                value={form.householdName}
-                onChange={(e) => setForm({ ...form, householdName: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Family Size
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={15}
-                value={form.familySize}
-                onChange={(e) =>
-                  setForm({ ...form, familySize: Math.max(1, Number(e.target.value)) })
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-4 rounded-xl bg-slate-50 p-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.hasChildren}
-                onChange={(e) => setForm({ ...form, hasChildren: e.target.checked })}
-                className="accent-emerald-600"
-              />
-              Children in home
-            </label>
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.hasSeniors}
-                onChange={(e) => setForm({ ...form, hasSeniors: e.target.checked })}
-                className="accent-emerald-600"
-              />
-              Older adults (65+)
-            </label>
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.hasPurifier}
-                onChange={(e) => setForm({ ...form, hasPurifier: e.target.checked })}
-                className="accent-emerald-600"
-              />
-              Have HEPA air purifier
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Respiratory Sensitivity
-              </label>
-              <select
-                value={form.respiratorySensitivity}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    respiratorySensitivity: e.target.value as RespiratorySensitivity,
-                  })
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="none">None</option>
-                <option value="mild">Mild / Seasonal Allergies</option>
-                <option value="asthma_copd">Asthma / COPD / Cardiac</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Home Type
-              </label>
-              <select
-                value={form.homeType}
-                onChange={(e) =>
-                  setForm({ ...form, homeType: e.target.value as HomeType })
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="apartment">Apartment / Condo</option>
-                <option value="house">Independent House</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Primary Cooking Fuel
-              </label>
-              <select
-                value={form.cookingFuel}
-                onChange={(e) =>
-                  setForm({ ...form, cookingFuel: e.target.value as CookingFuel })
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="electric_induction">Electric / Induction</option>
-                <option value="gas">Gas Stove</option>
-                <option value="biomass">Wood / Biomass</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Primary Commute
-              </label>
-              <select
-                value={form.primaryCommute}
-                onChange={(e) =>
-                  setForm({ ...form, primaryCommute: e.target.value as PrimaryCommute })
-                }
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="car">Personal Car</option>
-                <option value="transit">Metro / Bus / Rail</option>
-                <option value="bike_walk">Walk / Bike</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700">
-              Solution Preference
-            </label>
-            <select
-              value={form.budgetMode}
-              onChange={(e) =>
-                setForm({ ...form, budgetMode: e.target.value as BudgetMode })
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="diy_low_cost">DIY &amp; Zero-Cost Hacks First</option>
-              <option value="balanced">Balanced (DIY + Essential Gear)</option>
-              <option value="smart_home">Smart Purifiers &amp; Appliances</option>
-            </select>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-            >
-              Save &amp; Personalize
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
-};
+}
